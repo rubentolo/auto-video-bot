@@ -1,0 +1,111 @@
+name: Generate Daily Unsplash Video
+
+on:
+  # Executa automaticamente todos os dias às 09:00 UTC
+  schedule:
+    - cron: "0 9 * * *"
+  
+  # Permite-te executar manualmente se quiseres testar
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          pip install requests moviepy
+
+      - name: Generate video
+        env:
+          UNSPLASH_ACCESS_KEY: ${{ eUAmPjjw8whpjlXY54HryI6F8jkOTqcIlyJ_tedcJsU }}
+        run: |
+          cat > generate_video.py << 'EOF'
+          import os
+          import requests
+          from moviepy.editor import ImageClip, concatenate_videoclips
+          import random
+          import time
+
+          # Configuração
+          API_KEY = os.environ.get('UNSPLASH_ACCESS_KEY')
+          if not API_KEY:
+              raise ValueError("Missing UNSPLASH_ACCESS_KEY")
+
+          # 1. Obter imagens aleatórias de natureza/tecnologia
+          topics = ["nature", "technology", "abstract", "city", "minimal"]
+          images_data = []
+          
+          for topic in topics:
+              url = f"https://api.unsplash.com/photos?client_id={API_KEY}&query={topic}&per_page=5&orientation=squarish"
+              response = requests.get(url)
+              if response.status_code == 200:
+                  photos = response.json()
+                  for photo in photos:
+                      download_url = photo['urls']['full']
+                      images_data.append(download_url)
+              
+              # Pequena pausa para não exceder limites da API
+              time.sleep(1)
+
+          if not images_data:
+              print("Nenhuma imagem encontrada.")
+              exit()
+
+          # 2. Baixar as imagens
+          downloaded_images = []
+          for i, img_url in enumerate(images_data[:15]): # Limita a 15 imagens para evitar uso excessivo
+              filename = f"img_{i}.jpg"
+              try:
+                  response = requests.get(img_url)
+                  if response.status_code == 200:
+                      with open(filename, 'wb') as f:
+                          f.write(response.content)
+                      downloaded_images.append(filename)
+              except Exception as e:
+                  print(f"Erro ao descarregar {filename}: {e}")
+
+          if not downloaded_images:
+              print("Nenhuma imagem descarregada com sucesso.")
+              exit()
+
+          # 3. Criar clipe de vídeo
+          clips = []
+          for img_file in downloaded_images:
+              try:
+                  clip = ImageClip(img_file).set_duration(3).set_fps(30)
+                  clips.append(clip)
+              except Exception as e:
+                  print(f"Erro ao processar {img_file}: {e}")
+
+          if not clips:
+              print("Nenhum clip criado.")
+              exit()
+
+          final_clip = concatenate_videoclips(clips)
+          output_filename = "unsplash_daily.mp4"
+          final_clip.write_videofile(output_filename, codec="libx264")
+          
+          # Limpeza
+          for f in downloaded_images:
+              if os.path.exists(f):
+                  os.remove(f)
+
+          print(f"Vídeo gerado: {output_filename}")
+          EOF
+
+          python generate_video.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: unsplash-video
+          path: unsplash_daily.mp4
