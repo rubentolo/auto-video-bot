@@ -26,7 +26,7 @@ jobs:
 
       - name: Generate video
         env:
-          UNSPLASH_ACCESS_KEY: ${{ eUAmPjjw8whpjlXY54HryI6F8jkOTqcIlyJ_tedcJsU }}
+          UNSPLASH_ACCESS_KEY: "eUAmPjjw8whpjlXY54HryI6F8jkOTqcIlyJ_tedcJsU"
         run: |
           cat > generate_video.py << 'EOF'
           import os
